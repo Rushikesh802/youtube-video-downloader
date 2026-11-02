@@ -10,6 +10,9 @@ from app.db.session import get_db
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 
+# Re-export get_db so API routers can import it from deps
+__all__ = ["get_db", "get_current_user", "get_current_active_user", "require_role"]
+
 # HTTPBearer authorization header scheme
 security_scheme = HTTPBearer(auto_error=False)
 
