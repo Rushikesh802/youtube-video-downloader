@@ -1,6 +1,5 @@
-import os
 from typing import List, Union
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -55,6 +54,18 @@ class Settings(BaseSettings):
     MAX_DOWNLOAD_FILE_SIZE_BYTES: int = 500 * 1024 * 1024  # 500 MB
     MAX_USER_CONCURRENT_JOBS: int = 2
     DOWNLOAD_EXPIRATION_HOURS: int = 24
+
+    # Celery worker behaviour
+    CELERY_WORKER_CONCURRENCY: int = 2          # worker slots per container
+    CELERY_TASK_SOFT_TIME_LIMIT: int = 1800     # seconds before SoftTimeLimitExceeded
+    CELERY_TASK_TIME_LIMIT: int = 2100          # seconds before SIGKILL
+    CELERY_RESULT_EXPIRES: int = 86400          # seconds to keep results in Redis
+
+    # Scratch directory for temporary media files inside the worker container
+    WORKER_SCRATCH_DIR: str = "/tmp/yt_downloader_jobs"
+
+    # YouTube Data API (optional — set when YouTube provider is enabled)
+    YOUTUBE_DATA_API_KEY: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

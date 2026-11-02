@@ -8,10 +8,20 @@ from app.core.exceptions import ForbiddenException, UnauthorizedException
 from app.core.security import decode_token
 from app.db.session import get_db
 from app.models.user import User
+from app.repositories.download_repository import DownloadRepository
+from app.repositories.media_repository import MediaRepository
 from app.repositories.user_repository import UserRepository
 
 # Re-export get_db so API routers can import it from deps
-__all__ = ["get_db", "get_current_user", "get_current_active_user", "require_role"]
+__all__ = [
+    "get_db",
+    "get_current_user",
+    "get_current_active_user",
+    "require_role",
+    "get_user_repository",
+    "get_download_repository",
+    "get_media_repository",
+]
 
 # HTTPBearer authorization header scheme
 security_scheme = HTTPBearer(auto_error=False)
@@ -22,6 +32,20 @@ async def get_user_repository(
 ) -> UserRepository:
     """Dependency injecting UserRepository with current async session."""
     return UserRepository(session)
+
+
+async def get_media_repository(
+    session: AsyncSession = Depends(get_db),
+) -> MediaRepository:
+    """Dependency injecting MediaRepository with current async session."""
+    return MediaRepository(session)
+
+
+async def get_download_repository(
+    session: AsyncSession = Depends(get_db),
+) -> DownloadRepository:
+    """Dependency injecting DownloadRepository with current async session."""
+    return DownloadRepository(session)
 
 
 async def get_current_user(
