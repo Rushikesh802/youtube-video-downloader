@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from app.api.deps import get_current_active_user
-from app.api.v1 import auth, downloads, videos
+from app.api.v1 import auth, downloads, history, videos
 from app.models.user import User
 from app.schemas.user import UserRead
 
@@ -14,6 +14,9 @@ api_v1_router.include_router(videos.router)
 
 # Download / processing routes: /api/v1/downloads/...
 api_v1_router.include_router(downloads.router)
+
+# History routes: /api/v1/history/...
+api_v1_router.include_router(history.router)
 
 
 # /api/v1/users/me  (Section 7 of the API design spec)

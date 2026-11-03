@@ -5,33 +5,45 @@ Handles:
   - POST /api/v1/downloads: Queue a new download/transcode job (202 Accepted)
   - GET /api/v1/downloads/{id}: Check current status and progress
   - GET /api/v1/downloads: List current user's download jobs
+  - GET /api/v1/downloads/{id}/file: Generate short-lived presigned download URL
   - GET /api/v1/downloads/{id}/events: Server-Sent Events (SSE) live progress stream
   - DELETE /api/v1/downloads/{id}: Cancel job and purge resources
+  - GET /api/v1/downloads/files/{file_path:path}: Local storage fallback file serving
 """
 import asyncio
+from datetime import datetime, timezone
+import hashlib
 import json
 import logging
+import os
+import re
 from typing import AsyncGenerator
-from fastapi import APIRouter, Depends, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 
 from app.api.deps import (
     get_current_active_user,
     get_download_repository,
+    get_history_repository,
     get_media_repository,
 )
 from app.config import settings
 from app.core.exceptions import (
+    BadRequestException,
+    ConflictException,
+    ExpiredException,
     NotFoundException,
     QuotaExceededException,
 )
 from app.models.download import Download
 from app.models.user import User
 from app.repositories.download_repository import DownloadRepository
+from app.repositories.history_repository import HistoryRepository
 from app.repositories.media_repository import MediaRepository
 from app.schemas.common import MessageResponse
 from app.schemas.download import (
     DownloadCreateRequest,
+    DownloadFileResponse,
     DownloadJobCreated,
     DownloadListResponse,
     DownloadRead,
@@ -165,7 +177,7 @@ async def delete_download_job(
         raise NotFoundException("Download job not found or access denied.")
 
     # If celery task is still active, attempt revocation
-    if download.celery_task_id and download.status in ("queued", "processing"):
+    if download.celery_task_id and download.status in ("queued", "processing", "uploading"):
         try:
             celery_app.control.revoke(download.celery_task_id, terminate=True)
         except Exception as exc:
@@ -177,6 +189,131 @@ async def delete_download_job(
 
     await download_repo.delete(download)
     return MessageResponse(message="Download job and associated resources deleted successfully.")
+
+
+@router.get(
+    "/{download_id}/file",
+    summary="Generate a short-lived presigned download URL for a completed media asset",
+    responses={
+        200: {"model": DownloadFileResponse},
+        307: {"description": "Redirect directly to signed URL"},
+        400: {"description": "Job failed or invalid state"},
+        404: {"description": "Download job not found"},
+        409: {"description": "Media file is still processing"},
+        410: {"description": "Download file has expired"},
+    },
+)
+async def get_download_file(
+    download_id: str,
+    request: Request,
+    redirect: bool = Query(False, description="Redirect browser directly to presigned URL"),
+    current_user: User = Depends(get_current_active_user),
+    download_repo: DownloadRepository = Depends(get_download_repository),
+    media_repo: MediaRepository = Depends(get_media_repository),
+    history_repo: HistoryRepository = Depends(get_history_repository),
+):
+    """
+    Validates job completion and expiration, generates a 15-minute presigned GET URL
+    with Content-Disposition attachment header, records a DownloadHistory audit event,
+    and returns the signed URL or redirects directly.
+    """
+    # 1. Fetch download owned by current user
+    download = await download_repo.get_by_id_for_user(download_id, current_user.id)
+    if not download:
+        raise NotFoundException("Download job not found or access denied.")
+
+    # 2. Check status state
+    if download.status == "expired":
+        raise ExpiredException("This download link has expired and is no longer available.")
+    if download.status in ("queued", "processing", "uploading"):
+        raise ConflictException(f"Media file is not ready yet. Current status: {download.status}")
+    if download.status in ("failed", "cancelled"):
+        raise BadRequestException(f"Download job {download.status}: {download.error_message or 'No output file available.'}")
+    if download.status != "completed":
+        raise BadRequestException(f"Download job is in unexpected state: {download.status}")
+
+    # 3. Check expiration timestamp
+    now = datetime.now(timezone.utc)
+    if download.expires_at:
+        # Standardize timezone for comparison
+        expires_at_utc = download.expires_at if download.expires_at.tzinfo else download.expires_at.replace(tzinfo=timezone.utc)
+        if expires_at_utc <= now:
+            # Mark expired in DB and delete file
+            download.status = "expired"
+            if download.file_key:
+                storage_service.delete_file(download.file_key)
+                download.file_key = None
+            await download_repo.update(download)
+            raise ExpiredException("This download link has expired and is no longer available.")
+
+    # 4. Verify storage key presence
+    if not download.file_key:
+        raise NotFoundException("Media storage key is missing for this download.")
+
+    # 5. Build human-readable sanitized filename
+    media = await media_repo.get_by_id(download.media_id)
+    title_raw = media.title if (media and media.title) else "media_download"
+    safe_title = re.sub(r'[\\/*?:"<>|]', "", title_raw).strip() or "media_download"
+    filename = f"{safe_title}.{download.format}"
+
+    content_types = {
+        "mp4": "video/mp4",
+        "webm": "video/webm",
+        "mp3": "audio/mpeg",
+    }
+    content_type = content_types.get(download.format, "application/octet-stream")
+
+    # 6. Generate presigned URL
+    download_url = storage_service.generate_presigned_url(
+        object_key=download.file_key,
+        expiration=settings.S3_PRESIGNED_EXPIRATION_SECONDS,
+        filename=filename,
+        content_type=content_type,
+    )
+
+    # 7. Record privacy-conscious audit entry in DownloadHistory
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    elif request.client and request.client.host:
+        client_ip = request.client.host
+    else:
+        client_ip = "127.0.0.1"
+
+    ip_hash = hashlib.sha256(client_ip.encode("utf-8")).hexdigest()
+
+    await history_repo.create_entry(
+        user_id=current_user.id,
+        download_id=download.id,
+        ip_hash=ip_hash,
+        downloaded_at=now,
+    )
+
+    if redirect:
+        return RedirectResponse(url=download_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+    return DownloadFileResponse(
+        download_url=download_url,
+        expires_in_seconds=settings.S3_PRESIGNED_EXPIRATION_SECONDS,
+        filename=filename,
+        file_size=download.file_size,
+        content_type=content_type,
+    )
+
+
+@router.get(
+    "/files/{file_path:path}",
+    summary="Local fallback media file server for development and offline testing",
+)
+async def serve_local_fallback_file(file_path: str):
+    """Serves file from local storage fallback when S3 is running in offline mode."""
+    local_path = storage_service.get_local_file_path(file_path)
+    if not local_path:
+        raise NotFoundException("Requested file not found in local store.")
+    return FileResponse(
+        path=local_path,
+        filename=os.path.basename(local_path),
+    )
 
 
 @router.get(

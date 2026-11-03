@@ -3,10 +3,12 @@ from app.schemas.user import Token, TokenPayload, UserBase, UserCreate, UserLogi
 from app.schemas.video import FormatOption, VideoMetadataRequest, VideoMetadataResponse, VideoRead
 from app.schemas.download import (
     DownloadCreateRequest,
+    DownloadFileResponse,
     DownloadJobCreated,
     DownloadListResponse,
     DownloadRead,
 )
+from app.schemas.history import DownloadHistoryItem, DownloadHistoryListResponse
 
 __all__ = [
     "MessageResponse",
@@ -23,7 +25,10 @@ __all__ = [
     "VideoMetadataResponse",
     "VideoRead",
     "DownloadCreateRequest",
+    "DownloadFileResponse",
     "DownloadJobCreated",
     "DownloadListResponse",
     "DownloadRead",
+    "DownloadHistoryItem",
+    "DownloadHistoryListResponse",
 ]

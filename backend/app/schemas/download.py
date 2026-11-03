@@ -42,3 +42,11 @@ class DownloadJobCreated(BaseModel):
     job_id: str
     status: str = "queued"
     message: str = "Processing request received. Your download has been queued."
+
+
+class DownloadFileResponse(BaseModel):
+    download_url: str = Field(..., description="Short-lived signed S3 URL or direct delivery URL")
+    expires_in_seconds: int = Field(..., description="Validity period of the signed URL in seconds")
+    filename: str = Field(..., description="Sanitized human-readable filename for Content-Disposition")
+    file_size: Optional[int] = Field(None, description="Output file size in bytes")
+    content_type: str = Field("application/octet-stream", description="MIME content type")

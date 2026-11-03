@@ -50,3 +50,9 @@ class SSRFException(AppException):
 class QuotaExceededException(AppException):
     def __init__(self, detail: str = "Operation quota or rate limit exceeded."):
         super().__init__(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=detail)
+
+
+class ExpiredException(AppException):
+    def __init__(self, detail: str = "This resource has expired and is no longer available."):
+        super().__init__(status_code=status.HTTP_410_GONE, detail=detail)
+

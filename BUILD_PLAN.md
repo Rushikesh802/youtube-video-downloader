@@ -312,31 +312,43 @@ flowchart LR
 
 ---
 
-### Phase 4 — Storage Service & Secure Asset Delivery
+### Phase 4 — Storage Service & Secure Asset Delivery [COMPLETED]
 
 **Objective**: Secure multi-part S3 storage and short-lived signed download links.
 
 #### Tasks:
-1. **Object Storage Service (`app/services/storage_service.py`)**:
-   - S3 client wrapper supporting both AWS S3 and MinIO with multipart upload support for large assets (>50MB).
-   - Deterministic and collision-free object key scheme: `downloads/{user_id}/{year}/{month}/{job_id}.{ext}`.
-   - Private bucket policy enforcement (no public read permissions allowed).
-2. **Presigned URL Generator**:
+- [x] **Object Storage Service (`app/services/storage_service.py`)**:
+   - S3 client wrapper supporting both AWS S3 and MinIO with multipart upload support for large assets (>50MB via `boto3` TransferConfig).
+   - Deterministic and collision-free object key scheme: `downloads/{user_id}/{year}/{month:02d}/{job_id}.{ext}`.
+   - Private bucket policy enforcement and verification (`ensure_bucket_exists`).
+   - Short-lived presigned GET URLs with custom `Content-Disposition` filename headers.
+   - Robust local filesystem fallback for offline development, integration testing, and path traversal protection.
+- [x] **Presigned URL Generator & Delivery API (`app/api/v1/downloads.py`)**:
    - Endpoint: `GET /api/v1/downloads/{id}/file`.
    - Verification: Checks `user_id == current_user.id`, verifies `status == completed`, verifies `expires_at > now()`.
-   - Generates AWS S3 / MinIO Presigned GET URL with strict TTL (default 15 minutes).
-   - Inserts audit record into `DownloadHistory` with hashed client IP.
-3. **Automated Expiry & Cleanup Worker (`app/workers/cleanup_worker.py`)**:
-   - Celery Beat scheduled task executing every 15 minutes.
+   - Generates AWS S3 / MinIO Presigned GET URL with strict TTL (default 15 minutes / 900 seconds) and attachment header.
+   - Inserts audit record into `DownloadHistory` with hashed client IP (SHA-256).
+   - Optional `?redirect=true` direct 307 temporary redirect.
+   - Local fallback file serving endpoint: `GET /api/v1/downloads/files/{file_path:path}`.
+- [x] **Download History & Audit Trail (`app/api/v1/history.py`)**:
+   - `HistoryRepository` for `DownloadHistory` with joined download and media details.
+   - `GET /api/v1/history`: Paginated list of user's past file download events.
+   - `GET /api/v1/history/{id}`: Single audit event details.
+   - `DELETE /api/v1/history/{id}`: History item deletion.
+- [x] **Automated Expiry & Cleanup Worker (`app/workers/cleanup_worker.py`)**:
+   - Celery Beat scheduled task executing every 15 minutes (`expire_stale_downloads`).
    - Queries `Download` records where `expires_at <= now()` and `status == completed`.
    - Deletes underlying object from S3/MinIO storage.
    - Updates status to `expired` and clears `file_key`.
-   - Cleans orphaned temporary files in worker container scratch volumes.
+   - Purges orphaned temporary files in worker container scratch volumes (`purge_orphan_temp_files`).
+- [x] **Automated Tests**:
+   - 88/88 unit and integration tests passing (`test_storage_service.py`, `test_cleanup_worker.py`, `test_api_file_delivery.py`, `test_api_history.py`).
 
 **Phase 4 Milestone Deliverable**:
 - Processed files reliably stored in MinIO bucket.
 - User can obtain a 15-minute signed URL to download their file directly.
 - Expired files are automatically purged by Celery Beat without orphaned storage leaks.
+- 88/88 test suite passing.
 
 ---
 

@@ -9,6 +9,7 @@ from app.core.security import decode_token
 from app.db.session import get_db
 from app.models.user import User
 from app.repositories.download_repository import DownloadRepository
+from app.repositories.history_repository import HistoryRepository
 from app.repositories.media_repository import MediaRepository
 from app.repositories.user_repository import UserRepository
 
@@ -21,6 +22,7 @@ __all__ = [
     "get_user_repository",
     "get_download_repository",
     "get_media_repository",
+    "get_history_repository",
 ]
 
 # HTTPBearer authorization header scheme
@@ -46,6 +48,13 @@ async def get_download_repository(
 ) -> DownloadRepository:
     """Dependency injecting DownloadRepository with current async session."""
     return DownloadRepository(session)
+
+
+async def get_history_repository(
+    session: AsyncSession = Depends(get_db),
+) -> HistoryRepository:
+    """Dependency injecting HistoryRepository with current async session."""
+    return HistoryRepository(session)
 
 
 async def get_current_user(

@@ -195,7 +195,12 @@ async def _execute_job_pipeline(download_id: str) -> dict:
 
         # 6. Upload to Object Storage
         now = datetime.now(timezone.utc)
-        object_key = f"downloads/{user_id}/{now.year}/{now.month:02d}/{download_id}.{format_str}"
+        object_key = storage_service.generate_object_key(
+            user_id=user_id,
+            job_id=download_id,
+            format_str=format_str,
+            timestamp=now,
+        )
 
         content_types = {
             "mp4": "video/mp4",
