@@ -122,6 +122,19 @@ services:
       - ./backend:/app
     command: celery -A app.workers.celery_app.celery_app worker --loglevel=info -Q media-processing,metadata-fetch,housekeeping -c 2
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: yt_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+
 volumes:
   postgres_data:
   redis_data:

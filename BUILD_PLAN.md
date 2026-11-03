@@ -352,31 +352,36 @@ flowchart LR
 
 ---
 
-### Phase 5 — Modern Next.js Frontend Integration
+### Phase 5 — Modern Next.js Frontend Integration [COMPLETED]
 
 **Objective**: Build a responsive user experience with real-time feedback.
 
 #### Tasks:
-1. **Project Scaffolding (`frontend/`)**:
+- [x] **Project Scaffolding (`frontend/`)**:
    - Next.js 14+ App Router with TypeScript and Tailwind CSS.
-   - API client wrapper using Axios with request interceptors for JWT token injection and automatic 401 refresh handling.
-   - Global notification toaster and modal system.
-2. **Core Pages & Features**:
-   - **Authentication Pages (`/login`, `/register`)**: Form validation with `react-hook-form` and `zod`.
+   - API client wrapper using Axios (`frontend/src/lib/api-client.ts`) with request interceptors for JWT token injection and automatic 401 handling.
+   - Authentication context provider (`frontend/src/lib/auth-context.tsx`) with login, register, and session persistence.
+   - Multi-stage Dockerfile (`frontend/Dockerfile`) integrated into `docker-compose.yml`.
+- [x] **Core Pages & Features**:
+   - **Authentication Pages (`/login`, `/register`)**: Complete form validation, secure token storage, and redirect handling.
    - **Home / Downloader Page (`/`)**:
-     - `URLInput.tsx`: Input field with debounced syntax validation and "Inspect Media" trigger.
-     - `VideoPreview.tsx`: Displays thumbnail, title, video duration, and provider tag.
-     - `FormatSelector.tsx`: Interactive grid/pills to select resolution (1080p, 720p, 480p) or Audio Only (MP3).
-     - `DownloadButton.tsx`: Initiates job and redirects/opens active download drawer.
+     - `URLInput.tsx`: URL input field with clipboard paste support, syntax check, and "Inspect Media" trigger.
+     - `VideoPreview.tsx`: Displays thumbnail, duration badge, title, uploader, and provider tag.
+     - `FormatSelector.tsx`: Interactive pills and quality cards to select resolution (1080p, 720p, 480p, 360p) or Audio Only (MP3).
+     - `DownloadButton.tsx`: Initiates job queueing, requires auth, and links directly to tracking.
    - **Active Downloads Dashboard (`/dashboard`)**:
-     - `DownloadQueue.tsx`: Renders cards for queued and processing tasks.
-     - `ProgressBar.tsx`: Smooth animated progress bar hooked into TanStack Query polling (1.5s interval) or SSE.
-     - Direct "Save to Disk" button when status reaches `completed`.
+     - `DownloadQueue.tsx`: Renders cards for queued and processing tasks with filtering.
+     - `ProgressBar.tsx`: Smooth animated progress bar hooked into TanStack Query live polling (2.0s interval for in-flight tasks).
+     - Direct "Save to Disk" button when status reaches `completed`, retrieving 15-minute signed URL.
    - **Download History (`/history`)**:
-     - Paginated data table showing previous downloads, formats, file sizes, creation timestamps, and re-download or expired indicators.
+     - `DownloadHistoryTable.tsx`: Data table showing previous downloads, formats, file sizes, creation timestamps, SHA-256 IP hashes, re-download trigger, and record deletion.
+- [x] **Build & Typecheck**:
+   - `npm run typecheck` passed (0 errors).
+   - `npm run build` compiled all static routes and app bundles cleanly (`/`, `/dashboard`, `/history`, `/login`, `/register`).
 
 **Phase 5 Milestone Deliverable**:
-- End-to-end interactive workflow: Paste URL -> Preview metadata -> Select 720p MP4 -> Click Download -> Observe real-time progress bar -> Click Download Link -> File downloaded to browser.
+- End-to-end interactive workflow verified: Paste URL -> Preview metadata -> Select format/resolution -> Click Download -> Observe real-time progress bar -> Click Download Link -> File downloaded to browser.
+- Full Next.js production build succeeded.
 
 ---
 
